@@ -114,6 +114,13 @@ public class TocMojo extends AbstractMojo {
     private String[] chapterList;	// chapter title regular expressions
     private String[] tagList;	        // ignored tag regular expressions
     private Pattern tagPattern;
+    // following for error messages
+    private String curfile;
+    private String lastline;
+    private int lineno;
+
+    // amount of slop to allow in "underlines" for section header lines
+    private static final int HEADER_SLOP = 5;
 
     @Override
     public void execute() throws MojoExecutionException {
@@ -195,11 +202,14 @@ public class TocMojo extends AbstractMojo {
      */
     private void walk(String file) throws IOException {
         title = next = prev = null;
+	curfile = file;
+	lineno = 0;
         File in = new File(sourceDirectory, file);
         try (BufferedReader r = new BufferedReader(new FileReader(in))) {
             String line;
             // read and extract information from the header
             while ((line = r.readLine()) != null) {
+		lineno++;
                 if (line.startsWith("~"))
                     break;
                 if (line.startsWith("title="))
@@ -212,12 +222,13 @@ public class TocMojo extends AbstractMojo {
                                 replace(".html", ".adoc");
             }
 
-            String lastline = "";
+            lastline = "";
             String biglink = "";
             String smalllink = "";
             String link = "";
             boolean seenNonEmpty = false;
             while ((line = r.readLine()) != null) {
+		lineno++;
                 if (line.startsWith("[[") && line.endsWith("]]")) {
                     Matcher m = tagPattern.matcher(line);
                     while (m.find()) {
@@ -310,9 +321,25 @@ public class TocMojo extends AbstractMojo {
 
     /**
      * Is line a header line of length len using hchar?
+     * Also, warn about header lines that may not have the correct
+     * amount of "underlining".
      */
-    private static boolean isHeader(String line, String hchar, int len) {
-        return line.length() > 0 && line.matches(hchar + "{" + len + "}");
+    private boolean isHeader(String line, String hchar, int len) {
+	if (line.length() == 0)
+	    return false;
+	if (line.length() == len)
+	    return line.matches(hchar + "{" + len + "}");
+	if (len > HEADER_SLOP &&
+		line.length() >= len - HEADER_SLOP &&
+		line.length() <= len + HEADER_SLOP &&
+		line.matches(hchar + "{" + (len-HEADER_SLOP) + "," +
+					(len+HEADER_SLOP+1) + "}")) {
+	    log.warn(curfile + ":" + lineno + ": header line length mismatch:");
+	    log.warn(lastline);
+	    log.warn(line);
+	    return true;
+	}
+	return false;
     }
 
     /**
