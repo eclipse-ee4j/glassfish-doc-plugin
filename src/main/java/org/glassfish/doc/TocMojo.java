@@ -25,14 +25,7 @@ import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
-import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.model.Resource;
-import org.codehaus.plexus.resource.ResourceManager;
-import org.codehaus.plexus.resource.loader.FileResourceCreationException;
-import org.codehaus.plexus.resource.loader.FileResourceLoader;
-import org.codehaus.plexus.resource.loader.ResourceNotFoundException;
-import org.codehaus.plexus.util.FileUtils;
 
 /**
  * Generate Table of Contents (TOC) for asciidoc jbake projects.
@@ -97,14 +90,6 @@ public class TocMojo extends AbstractMojo {
      * Log output, initialize this in the execute method.
      */
     protected Log log;
-
-    /**
-     * @component
-     * @required
-     * @readonly
-     */
-    @Component
-    private ResourceManager resourceManager;
 
     private String next;	// "next" link
     private String prev;	// "prev" link
