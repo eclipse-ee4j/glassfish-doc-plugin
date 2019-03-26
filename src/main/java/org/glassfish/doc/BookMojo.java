@@ -38,11 +38,12 @@ public class BookMojo extends AbstractMojo {
      * Name of the start page file.
      * The book starts with this file.
      */
-    @Parameter(property = "book.startpage", defaultValue = "toc.adoc")
+    @Parameter(property = "book.startpage", defaultValue = "title.adoc")
     protected String startPage;
 
     /**
      * The title to use in the book.
+     * Defaults to title set in start page.
      */
     @Parameter(property = "book.title")
     protected String title;
@@ -66,6 +67,14 @@ public class BookMojo extends AbstractMojo {
     @Parameter(property = "book.dir",
 		defaultValue = "${project.basedir}/src/main/jbake/content")
     protected File sourceDirectory;
+
+    /**
+     * Name of optional attributes configuration file for the book.
+     * (Default is "book-attributes.conf".)
+     */
+    @Parameter(property = "book.attributes", defaultValue =
+            "${project.basedir}/src/main/jbake/content/book-attributes.conf")
+    protected File attributesFile;
 
     /**
      * Output directory containing the processed asciidoc files for the book.
@@ -115,8 +124,36 @@ public class BookMojo extends AbstractMojo {
 		    "Book directory is not a directory");
 	    }
 
+            // if title not set, get it from the start page
+            if (title == null) {
+                File in = new File(sourceDirectory, startPage);
+                try (BufferedReader r = new BufferedReader(new FileReader(in))) {
+                    String line;
+                    // read and extract information from the header
+                    while ((line = r.readLine()) != null) {
+                        if (line.startsWith("~"))
+                            break;
+                        if (line.startsWith("title=")) {
+                            title = line.substring(line.indexOf("=") + 1);
+                            break;
+                        }
+                    }
+                }
+            }
+
             PrintWriter tout = new PrintWriter(new File(bookDirectory, book));
             tout.printf("= %s%n", title);
+
+            // if there's a book attribtues file, include its contents
+            if (attributesFile != null && attributesFile.exists()) {
+                try (BufferedReader r =
+                        new BufferedReader(new FileReader(attributesFile))) {
+                    String line;
+                    while ((line = r.readLine()) != null)
+                        tout.println(line);
+                }
+            }
+
             tout.println();
 
             /*
@@ -141,15 +178,14 @@ public class BookMojo extends AbstractMojo {
             } while (next != null);
 
             /*
-             * Warn about files in the source directory that were not included
-             * in the "next" links.
+             * Copy any files we haven't processed because they might
+             * be include files or attribute configuration files.
              */
             for (String name : sourceDirectory.list()) {
-                if (!name.endsWith(".adoc") || name.equals("cpyr.adoc") ||
-                        name.equals("toc.adoc") || name.equals(book))
+                if (name.equals("toc.adoc") || name.equals(book))
                     continue;
                 if (!seen.contains(name))
-                    log.warn("MISSED: " + name);
+                    copy(name);
             }
 
             tout.close();
@@ -207,15 +243,52 @@ public class BookMojo extends AbstractMojo {
                 boolean first = true;
 		while ((line = r.readLine()) != null) {
                     if (first) {
+                        // ignore empty lines
+                        if (line.length() == 0)
+                            continue;
+                        // copy over include lines
+                        if (line.startsWith("include::") &&
+                                line.endsWith("[]")) {
+                            w.println(line);
+                            continue;
+                        }
                         first = false;
+                        // throw away the page title
                         if (line.startsWith("= "))
                             continue;
+                        else {
+                            String nline = r.readLine();
+                            if (nline != null && nline.startsWith("=") &&
+                                    nline.length() == line.length())
+                                continue;
+                            w.println(line);
+                            line = nline;
+                        }
                     }
 		    w.println(line);
                 }
 	    }
         } catch (FileNotFoundException fex) {
             log.warn(in.toString() + ": can not open");
+        }
+    }
+
+    /**
+     * Copy the file from the source directory to the book directory.
+     */
+    private void copy(String file) throws IOException {
+        File in = new File(sourceDirectory, file);
+        File out = new File(bookDirectory, file);
+        if (in.isDirectory())
+            return;     // skip directories
+        try (BufferedInputStream bin =
+                new BufferedInputStream(new FileInputStream(in));
+            BufferedOutputStream bout =
+                new BufferedOutputStream(new FileOutputStream(out))) {
+            byte[] buf = new byte[16*1024];
+            int n;
+            while ((n = bin.read(buf)) > 0)
+                bout.write(buf, 0, n);
         }
     }
 }

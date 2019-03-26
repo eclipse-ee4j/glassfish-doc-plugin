@@ -41,6 +41,7 @@ public class TocMojo extends AbstractMojo {
 
     /**
      * The title to use in the TOC.
+     * Defaults to title set in title page.
      */
     @Parameter(property = "toc.title")
     protected String title;
@@ -130,6 +131,23 @@ public class TocMojo extends AbstractMojo {
         }
 
         try {
+            // if title not set, get it from the title page
+            if (title == null) {
+                File in = new File(sourceDirectory, titlePage);
+                try (BufferedReader r = new BufferedReader(new FileReader(in))) {
+                    String line;
+                    // read and extract information from the header
+                    while ((line = r.readLine()) != null) {
+                        if (line.startsWith("~"))
+                            break;
+                        if (line.startsWith("title=")) {
+                            title = line.substring(line.indexOf("=") + 1);
+                            break;
+                        }
+                    }
+                }
+            }
+
             // create, open, and write toc.adoc
             tout = new PrintWriter(new File(sourceDirectory, toc));
             tout.println("type=page");
