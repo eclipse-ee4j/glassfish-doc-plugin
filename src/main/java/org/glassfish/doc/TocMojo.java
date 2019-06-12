@@ -131,21 +131,23 @@ public class TocMojo extends AbstractMojo {
         }
 
         try {
-            // if title not set, get it from the title page
-            if (title == null) {
-                File in = new File(sourceDirectory, titlePage);
-                try (BufferedReader r = new BufferedReader(new FileReader(in))) {
-                    String line;
-                    // read and extract information from the header
-                    while ((line = r.readLine()) != null) {
-                        if (line.startsWith("~"))
-                            break;
-                        if (line.startsWith("title=")) {
-                            title = line.substring(line.indexOf("=") + 1);
-                            break;
-                        }
-                    }
+            String includeLine = null;
+            File in = new File(sourceDirectory, titlePage);
+            try (BufferedReader r = new BufferedReader(new FileReader(in))) {
+                String line;
+                // read and extract information from the header
+                while ((line = r.readLine()) != null) {
+                    if (line.startsWith("~"))
+                        break;
+                    // if title not set, get it from the title page
+                    if (title == null && line.startsWith("title="))
+                        title = line.substring(line.indexOf("=") + 1);
                 }
+
+                // if the first line after the header is an include, keep it
+                if ((line = r.readLine()) != null &&
+                        line.startsWith("include::"))
+                    includeLine = line;
             }
 
             // create, open, and write toc.adoc
@@ -155,6 +157,8 @@ public class TocMojo extends AbstractMojo {
             tout.println("title=" + title);
             tout.println("next=" + titlePage.replace(".adoc", ".html"));
             tout.println("~~~~~~");
+            if (includeLine != null)
+                tout.println(includeLine);
             tout.println(title);
             tout.println(headerLine('=', title.length()));
             tout.println();
